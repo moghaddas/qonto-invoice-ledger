@@ -1,14 +1,18 @@
 /**
- * End-to-end smoke test. Run `selfTest()` once from the editor (this also
- * triggers the one-time authorization). It is SAFE and idempotent:
- *   - synthesizes a throwaway PDF invoice (no real email is touched),
- *   - runs it through Gemini (via the AI Gateway) to prove extraction,
- *   - files it into Drive to prove foldering/naming, then TRASHES that file,
- *   - reads the Qonto open-debit pool to prove API auth,
+ * End-to-end smoke test. Run `selfTest()` once from the editor, which also
+ * triggers the one-time authorization. It is safe and idempotent:
+ *   - synthesizes a throwaway PDF invoice, so no email is touched,
+ *   - runs it through Gemini to prove extraction,
+ *   - files it into Drive to prove foldering and naming, then trashes it,
+ *   - reads the Qonto debit pool to prove API auth,
  *   - writes a row per step to a `SelfTest` tab in the ledger.
- * It never attaches to a real transaction and never archives real mail.
+ * It never attaches to a real transaction and never archives mail.
  * Results are also visible in the execution log (View -> Logs).
  */
+/** How far back the Qonto probe looks. Wide enough that a quiet account
+ *  still returns a debit, which is what proves the credentials work. */
+const SELFTEST_LOOKBACK_DAYS = 90;
+
 function selfTest() {
   ensureLedger_(); // so the ledger + SelfTest tab exist even before setup()
   const out = { startedAt: new Date(), steps: [] };
@@ -17,10 +21,10 @@ function selfTest() {
     try {
       const info = fn();
       out.steps.push({ name: name, ok: true, info: info });
-      Logger.log('PASS %s — %s', name, info);
+      Logger.log('PASS %s: %s', name, info);
     } catch (e) {
       out.steps.push({ name: name, ok: false, info: String(e).slice(0, 400) });
-      Logger.log('FAIL %s — %s', name, e);
+      Logger.log('FAIL %s: %s', name, e);
     }
   }
 
@@ -54,7 +58,7 @@ function selfTest() {
 
   step('qonto-debits', function () {
     const to = new Date();
-    const from = addDays_(to, -CFG.GMAIL_LOOKBACK_DAYS);
+    const from = addDays_(to, -SELFTEST_LOOKBACK_DAYS);
     const debits = qontoDebits_(from, to);
     const free = debits.filter(function (t) { return !hasAttachment_(t); }).length;
     // Queued transfers come from a different endpoint and are not bounded by the
@@ -64,14 +68,14 @@ function selfTest() {
     const next = queued.map(function (t) {
       return String(t.emitted_at).slice(0, 10) + ' ' + t.amount + ' ' + (t.label || t.reference);
     }).slice(0, 3).join('; ');
-    return debits.length + ' debit(s) in last ' + CFG.GMAIL_LOOKBACK_DAYS + 'd, ' +
+    return debits.length + ' debit(s) in last ' + SELFTEST_LOOKBACK_DAYS + 'd, ' +
            free + ' without a receipt, ' + queued.length + ' transfer(s) queued' +
-           (next ? ' — ' + next : '');
+           (next ? ': ' + next : '');
   });
 
   writeSelfTest_(out);
   const summary = out.steps.map(function (s) { return s.name + '=' + (s.ok ? 'PASS' : 'FAIL'); }).join(', ');
-  Logger.log('SELFTEST COMPLETE — ' + summary);
+  Logger.log('SELFTEST COMPLETE: ' + summary);
   return summary;
 }
 

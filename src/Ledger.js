@@ -21,7 +21,7 @@ function ledgerReadAll_() {
 }
 
 /**
- * Content fingerprint for dedupe — stable across re-captures and Drive lag.
+ * Content fingerprint for dedupe, stable across re-captures and Drive lag.
  * The invoice number is the vendor's own identifier for the document, so it
  * wins whenever there is one: extraction names the same vendor inconsistently
  * ("Acme GmbH" against "Acme GmbH (Cloud)"), and a supplier-keyed
@@ -40,7 +40,7 @@ function fpKey_(supplier, invoiceDate, amount, currency, invoiceNumber) {
 
 /**
  * The invoiceDate column holds a real date cell, so a ledger read yields a Date
- * while capture passes the 'yyyy-MM-dd' string it just built. Both must land on
+ * while capture passes the 'yyyy-MM-dd' string it built. Both must land on
  * the same key or cross-run dedupe silently compares two different key spaces
  * and every re-send is filed as a new invoice.
  */
@@ -86,7 +86,7 @@ function ledgerThreadStates_() {
   const am = colIndex_(headers, 'amount'), cu = colIndex_(headers, 'currency');
   const no = colIndex_(headers, 'invoiceNumber');
 
-  // A duplicate has no state of its own — it is one invoice arriving twice, so
+  // A duplicate has no state of its own. It is one invoice arriving twice, so
   // it inherits from the copy that was filed. A supplier that sends the same
   // receipt on two messages otherwise pins its thread in the Inbox: the filed
   // copy archives, the duplicate does not, and the thread shows both.

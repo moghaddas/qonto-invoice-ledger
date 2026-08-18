@@ -20,8 +20,8 @@ function runDigest() {
       '</td><td>' + esc_(o.amount) + ' ' + esc_(o.currency) + '</td><td>' + esc_(o.status) +
       '</td><td>' + esc_(o.notes) + '</td></tr>';
   });
-  html += '</table><p style="color:#666">To resolve a row manually, put the Qonto transaction id in the ' +
-    'ledger and run <code>attachManually(rowNumber, transactionId)</code>.</p>';
+  html += '</table><p style="color:#666">To resolve a row by hand, find the Qonto transaction id ' +
+    'and run <code>attachManually(rowNumber, transactionId)</code>.</p>';
 
   if (dryRun_()) {
     Logger.log('[dry-run] would email %s about %s invoice(s) to review',

@@ -1,6 +1,6 @@
 /**
- * Stage 1 + 2: read labelled Gmail, extract with Gemini, rename, file to Drive,
- * record in the ledger. Deterministic and idempotent (dedupe on Gmail message id).
+ * Stage 1 + 2: search Gmail, extract with Gemini, rename, file to Drive, record
+ * in the ledger. Deterministic and idempotent (dedupe on Gmail message id).
  */
 
 function runCapture() {
@@ -21,7 +21,7 @@ function runCapture() {
       atts.forEach(function (att) {
         try {
           // A duplicate takes the state of the invoice it copies, so it has to
-          // sync too — otherwise it holds its thread in the Inbox on its own.
+          // sync too. It pins its thread in the Inbox on its own otherwise.
           if (processAttachment_(msg, att, fps) !== 'SKIPPED') recorded = true;
         } catch (e) {
           recorded = true;
@@ -38,7 +38,7 @@ function runCapture() {
   });
 
   // Label the affected threads and leave every unpaid one in the Inbox. Pure
-  // non-invoice matches of the broad search are untouched — they're normal mail.
+  // non-invoice matches of the broad search are untouched: they are normal mail.
   syncThreads_(touched);
 }
 

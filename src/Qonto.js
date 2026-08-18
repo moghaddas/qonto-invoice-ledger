@@ -38,7 +38,7 @@ function qontoAuthHeader_() {
 }
 
 function qontoGet_(path, params) {
-  // Qonto's list filters repeat the key — status[]=completed&status[]=pending.
+  // Qonto's list filters repeat the key: status[]=completed&status[]=pending.
   // A joined value is read as one literal status and silently matches nothing,
   // so an array has to expand into one pair per element.
   const parts = [];
@@ -63,7 +63,7 @@ function qontoGet_(path, params) {
 }
 
 /**
- * Debits across the given accounts, emitted within [from, to] — the
+ * Debits across the given accounts, emitted within [from, to]. This is the
  * candidate pool Stage 3 matches against. Debits that already carry an
  * attachment are included: one of those means the invoice was reconciled in
  * Qonto by hand, so the ledger row has to settle against it instead of being
@@ -86,7 +86,7 @@ function qontoDebits_(fromDate, toDate) {
         // pending is a transaction in flight: the balance is not debited yet but
         // the transfer is being processed. It must not be attached to, only
         // recognised. A transfer scheduled for a future date has no transaction
-        // at all — qontoScheduledTransfers_ is the only way to see one.
+        // at all, and qontoScheduledTransfers_ is the only way to see one.
         'status[]': ['completed', 'pending'],
         per_page: 100,
         page: page
@@ -106,7 +106,7 @@ function qontoDebits_(fromDate, toDate) {
  * SEPA transfers Qonto has accepted but not executed, shaped like the debits
  * they will become so one matcher covers both. A transfer only becomes a
  * transaction when it is processed, so a payment scheduled for a future date is
- * invisible to /transactions under every status — it lives here alone.
+ * invisible to /transactions under every status. It lives here alone.
  *
  * Only `pending` is taken: the moment a transfer starts `processing` Qonto
  * creates the transaction, which qontoDebits_ already returns. Taking both would
@@ -194,7 +194,7 @@ function qontoAttach_(transactionId, blob, idempotencyKey) {
     return false;
   }
   // UrlFetchApp builds multipart/form-data automatically when a payload field
-  // is a Blob — do NOT set contentType, or the boundary won't be added.
+  // is a Blob. Do NOT set contentType, or the boundary is left out.
   const res = UrlFetchApp.fetch(CFG.QONTO_BASE_URL + '/transactions/' + transactionId + '/attachments', {
     method: 'post',
     headers: {
@@ -210,7 +210,7 @@ function qontoAttach_(transactionId, blob, idempotencyKey) {
 }
 
 /**
- * True while the money is committed but not moved — a queued transfer, or a
+ * True while the money is committed but not moved: a queued transfer, or a
  * transaction Qonto is still processing. Neither takes a receipt yet.
  * The status test is written as "not one of the settled or dead statuses"
  * rather than status === 'pending' so an unexpected token cannot silently mark

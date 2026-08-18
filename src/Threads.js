@@ -1,8 +1,8 @@
 /**
- * Inbox state for invoice mail. A thread shows exactly one state label — the
- * worst among the invoices filed from it — and is archived once every one of
+ * Inbox state for invoice mail. A thread shows exactly one state label, the
+ * worst among the invoices filed from it, and is archived once every one of
  * them is settled, meaning paid or scheduled for payment. State is derived from
- * the ledger, never from the labels, so a hand-edited label is corrected on the
+ * the ledger, never from the labels, so a hand-edited chip is corrected on the
  * next run.
  */
 
@@ -27,8 +27,8 @@ function ensureGmailLabels_() {
 
 /**
  * Set the label chip colours. Colour is reachable only through the Gmail
- * advanced service (GmailApp has no API for it), so this is best-effort —
- * losing the colour must never stop invoices being filed.
+ * advanced service (GmailApp has no API for it), so this is best-effort.
+ * A lost colour must never stop invoices being filed.
  * @param {Object} colourByName label name -> {backgroundColor, textColor}
  */
 function applyLabelColours_(colourByName) {
@@ -99,7 +99,7 @@ function syncThread_(thread, stateByMsg, labels, snoozed) {
   const worst = CFG.THREAD_STATE_ORDER.filter(function (s) { return present[s]; })[0];
   const settled = CFG.THREAD_STATES_SETTLED.indexOf(worst) >= 0;
 
-  // No state left on the thread — a row reclassified as a non-invoice, say.
+  // No state left on the thread, after a row is reclassified as a non-invoice.
   // Strip our labels rather than leaving the last one stranded, and never
   // archive: with nothing invoice-related on it this is ordinary mail.
   const has = {};
@@ -124,7 +124,7 @@ function syncThread_(thread, stateByMsg, labels, snoozed) {
   if (settled) {
     thread.moveToArchive();
   } else if (wasSettled && !thread.isInInbox() && !(snoozed || {})[thread.getId()]) {
-    // It was settled and no longer is — a scheduled transfer was cancelled, or
+    // It was settled and no longer is: a scheduled transfer was cancelled, or
     // a match was undone. The invoice is owed again, so it goes back where an
     // unpaid invoice belongs. This is the only path that returns a thread to the
     // Inbox, so an archive done by hand on never-settled mail still sticks, and
@@ -149,8 +149,8 @@ function snoozedThreadIds_() {
 
 /**
  * Archive settled threads that are sitting in the Inbox. A settled row is rarely
- * revisited, so a thread that returns on its own — a snooze expiring, or the
- * vendor replying on it — would otherwise stay there for good.
+ * revisited. A thread that returns on its own, through a snooze expiring or
+ * the vendor replying on it, would otherwise stay there for good.
  */
 function sweepSettledInInbox_() {
   const threads = [];
@@ -181,7 +181,7 @@ function threadOf_(msgId) {
 
 /**
  * Manual repair: re-label every invoice thread in the ledger and pull the
- * unpaid ones back into the Inbox. Run from the editor. Safe to re-run — it
+ * unpaid ones back into the Inbox. Run from the editor. Safe to re-run: it
  * reads the ledger, so it converges on the same result every time.
  * @return {string} summary, also written to the execution log
  */
@@ -189,7 +189,9 @@ function restoreUnpaidToInbox() {
   const preview = dryRun_();
   if (!preview) ensureGmailLabels_();
   const stateByMsg = ledgerThreadStates_();
-  const labels = threadLabels_();
+  // threadLabels_ creates any label it cannot find, so a dry run must not
+  // build it. syncThread_ applies nothing under a preview and never reads it.
+  const labels = preview ? {} : threadLabels_();
   const snoozed = snoozedThreadIds_();
   const seenThread = {};
   let relabelled = 0, restored = 0, leftSnoozed = 0;

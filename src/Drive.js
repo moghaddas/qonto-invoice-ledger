@@ -1,7 +1,7 @@
 /**
  * Filing + supplier normalization. Path is built by INVOICE DATE:
- *   <INBOUND>/<YYYY>/<YYMM>/<YYMMDD_Supplier.pdf>
- * Year subfolders already exist; month subfolders are created on demand.
+ *   <INBOUND>/<YYYY>/<YYMM>/<YYMMDD_Supplier.ext>
+ * Year and month subfolders are reused when they exist, created when they do not.
  */
 
 function fileInvoice_(blob, supplier, invoiceDate, invoiceNumber) {
@@ -24,14 +24,9 @@ function fileInvoice_(blob, supplier, invoiceDate, invoiceNumber) {
 }
 
 /**
- * Reuse an existing subfolder rather than duplicating it. Prefer an exact-name
- * match; otherwise reuse any existing folder whose name contains `token` (so
- * "2026 Inbound Invoices" is matched for token "2026"); otherwise create
- * `exactName`. Prevents parallel year/month folders when a naming convention
- * ("YYYY Inbound Invoices") already exists in the drive.
- */
-/**
- * Reuse the folder you already keep invoices in, whatever you called it.
+ * Reuse the folder you already keep invoices in, whatever you called it. An
+ * exact name wins. Failing that, any folder carrying `token` ("2026 Inbound
+ * Invoices" for token "2026"). Failing that, `exactName` is created.
  * The token has to start the name or stand as its own word: a bare substring
  * test files 2026 into an existing "2019-2026 archive" and never says so.
  */

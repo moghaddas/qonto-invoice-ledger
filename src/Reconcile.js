@@ -1,9 +1,9 @@
 /**
  * Stage 3: match filed invoices to Qonto debits, attach the receipt, then
- * re-label and archive the mail thread the invoice arrived on.
- * Conservative — only a single, unambiguous STRONG match auto-attaches; anything
- * else is left for the next run and eventually flagged for human review.
- * Retries naturally cover transactions that settle days after the invoice.
+ * re-label and archive the mail thread each one arrived on.
+ * Conservative: only a single, unambiguous STRONG match auto-attaches, and
+ * anything else is left for the next run and eventually flagged for review.
+ * Retries cover transactions that settle days after the invoice.
  */
 
 function runReconcile() {
@@ -38,7 +38,7 @@ function runReconcile() {
  * A candidate debit has to sit inside [invoiceDate - BEFORE, invoiceDate +
  * AFTER], so once that window closes the same query returns the same pool on
  * every run. Keep retrying an unresolved invoice only while the window is open.
- * The digest still lists it, and attachManually() still resolves it by hand.
+ * The digest still lists it, and attachManually() resolves it by hand.
  */
 function stillMatchable_(inv) {
   if (String(inv.status) !== STATUS.REVIEW) return true; // FILED always retries
@@ -51,10 +51,10 @@ function stillMatchable_(inv) {
  * Every debit that could match any pending row, read in one pass.
  *
  * Reading per row instead costs one paged /transactions walk per invoice. Two
- * dozen rows then approach the six-minute execution limit and earn a rate
- * limit, and a rate limit surfaces as a throw the per-row catch counts as a
- * failed attempt, so MAX_ATTEMPTS eventually parks a matchable invoice in
- * review for a reason that has nothing to do with matching.
+ * dozen rows then approach the six-minute execution ceiling and earn a rate
+ * limit. That surfaces as a throw, the per-row catch counts it as a failed
+ * attempt, and MAX_ATTEMPTS eventually parks a matchable invoice in review for
+ * a reason that has nothing to do with matching.
  */
 function debitPool_(pending) {
   let from = null, to = null;
@@ -128,8 +128,8 @@ function reconcileOne_(rowNumber, inv, pool) {
     return;
   }
   // Money is committed but not moved. The invoice is handled, so the thread
-  // leaves the Inbox — but no receipt goes up yet: the transaction only takes
-  // one once it settles, and this row keeps being reconciled until it does.
+  // leaves the Inbox. No receipt goes up yet: the transaction only takes one
+  // once it settles, and this row keeps reconciling until it does.
   if (!executed.length && scheduled.length === 1) {
     markScheduled_(rowNumber, scheduled[0].t);
     return;
@@ -150,8 +150,9 @@ function reconcileOne_(rowNumber, inv, pool) {
 /**
  * Record a queued payment. No upload: Qonto takes a receipt only once the
  * transaction exists and is completed, so the row keeps reconciling until then.
- * qontoTxnId stays empty for a queued transfer — its id belongs to /sepa/transfers
- * and every consumer of that column resolves ids against /transactions.
+ * qontoTxnId stays empty for a queued transfer, because its id belongs to
+ * /sepa/transfers and every reader of that column resolves ids against
+ * /transactions.
  */
 function markScheduled_(rowNumber, txn) {
   ledgerUpdate_(rowNumber, {
@@ -196,9 +197,10 @@ function attachAndMark_(rowNumber, inv, txn) {
 }
 
 /**
- * Score a candidate. amountExact is gated on amount+currency agreeing on either
- * the account amount (EUR) or the original local amount (FX, e.g. USD invoice).
- * A STRONG match additionally needs the counterparty name to agree.
+ * Score a candidate. amountExact is gated on amount and currency agreeing on
+ * either the account figure (EUR) or the original local one (FX, e.g. a USD
+ * invoice). A STRONG match also needs the counterparty to agree, by name, by
+ * invoice number, or by IBAN.
  */
 function scoreMatch_(inv, t) {
   const cur = String(inv.currency).toUpperCase();
@@ -212,11 +214,11 @@ function scoreMatch_(inv, t) {
   const nameScore = nameSimilarity_(inv.supplier, haystack, inv.supplierRaw);
   const nameHit = nameScore >= CFG.NAME_MATCH_MIN;
 
-  // Invoice number appearing in the payment reference — strong corroboration.
+  // Invoice number appearing in the payment reference: strong corroboration.
   const invNo = normRef_(inv.invoiceNumber);
   const invNoHit = invNo.length >= 4 && normRef_(t.reference).indexOf(invNo) >= 0;
 
-  // Vendor IBAN matching the transfer counterparty — the strongest signal.
+  // Vendor IBAN matching the transfer counterparty: the strongest signal.
   const cp = t.transfer && t.transfer.counterparty_account_number;
   const ibanHit = !!inv.supplierIban && !!cp && normIban_(inv.supplierIban) === normIban_(cp);
 
@@ -237,7 +239,7 @@ function normIban_(s) { return String(s || '').toUpperCase().replace(/\s+/g, '')
  * How much of the SUPPLIER name appears in the transaction label, 0..1.
  * Normalised by the supplier's own tokens: a bank label carries extra words
  * ("ANTHROPIC* CLAUDE SUB"), and dividing by its length drags a correct match
- * below NAME_MATCH_MIN — one hit in three words scores 0.33 against a 0.34 bar.
+ * below NAME_MATCH_MIN. One hit in three words scores 0.33 against a 0.34 bar.
  */
 function nameSimilarity_(supplier, label, supplierRaw) {
   const A = distinct_(tokens_(supplier).concat(tokens_(supplierRaw)));
@@ -277,14 +279,13 @@ function tokens_(s) {
 
 /**
  * The counterparty is right but the amount is not, so nothing can auto-attach.
- * A card charge can carry more than the invoice it pays — a failed-payment fee
- * rides along on the retry — and a bank never splits that back out. Naming the
- * charge and the gap turns a dead "no matching debit yet" into a row a human can
- * settle with attachManually(); silence here reads as "nothing arrived", which
- * is the opposite of the truth.
- */
-/**
- * The note a human reads before deciding whether to attach by hand, so the
+ * A card charge can carry more than the invoice it pays, because a
+ * failed-payment fee rides along on the retry, and a bank never splits that
+ * back out. Naming the charge and the gap turns a dead "no matching debit yet"
+ * into a row somebody can settle with attachManually(). Silence here reads as
+ * "nothing arrived", which is the opposite of the truth.
+ *
+ * A person reads this note before deciding whether to attach by hand, so the
  * delta has to be in the currency the invoice is written in. Comparing a EUR
  * account amount against a USD invoice reports the exchange rate as a
  * shortfall and makes a correct charge look wrong.

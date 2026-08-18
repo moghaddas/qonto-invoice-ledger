@@ -1,7 +1,8 @@
 /**
  * Invoice extraction via Gemini. Sends the raw PDF/image bytes with a strict
  * JSON schema and lets the model classify + extract in one call.
- * GEMINI_API_KEY (AI Studio, https://aistudio.google.com/apikey) in Script Props.
+ * GEMINI_API_KEY (AI Studio, https://aistudio.google.com/apikey) in Script
+ * Properties.
  */
 
 const INVOICE_SCHEMA = {
@@ -34,8 +35,8 @@ function extractPrompt_() {
     '  for goods or services. This INCLUDES both invoices and payment receipts,',
     '  paid or not: a card-charge receipt from a vendor is inbound=true.',
     '  Set false ONLY for a self-billed statement or payout generated on behalf of',
-    '  ' + own + ', which is how payment processors and affiliate networks report,',
-    '  or for an invoice ' + own + ' ISSUED to its own customer.',
+    '  ' + own + ', which is how payment processors and affiliate networks report',
+    '  what they owe, or for an invoice ' + own + ' ISSUED to its own customer.',
     '- invoiceDate: the ISSUE date in YYYY-MM-DD (for a receipt, the payment date).',
     '- amount: the gross total actually payable, including VAT or tax, as a number.',
     '- currency: ISO 4217 code.',

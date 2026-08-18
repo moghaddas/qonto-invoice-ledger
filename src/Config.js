@@ -26,9 +26,9 @@ const CFG = {
     PAID:      '✅ Paid'
   },
   // Worst first: the first state present on a thread is the one it shows.
-  // SCHEDULED sits with PAID on the settled side — the payment is arranged, so
-  // the thread leaves the Inbox — but below UNPAID, so an unarranged sibling
-  // still holds the thread there.
+  // SCHEDULED sits with PAID on the settled side, because the payment is
+  // arranged and the mail can leave the Inbox. It ranks below UNPAID, so an
+  // unarranged sibling still holds the thread there.
   THREAD_STATE_ORDER: ['ERROR', 'REVIEW', 'UNPAID', 'SCHEDULED', 'PAID'],
   // States whose threads belong out of the Inbox.
   THREAD_STATES_SETTLED: ['SCHEDULED', 'PAID'],
@@ -45,7 +45,7 @@ const CFG = {
   MAX_THREADS_PER_RUN: 50,
 
   // --- Drive (Inbound only; Outbound is out of scope) ---
-  // Root "Inbound" folder that already contains the year subfolders.
+  // Root "Inbound" folder the year subfolders sit under.
   // Path built underneath: <INBOUND>/<YYYY>/<YYMM>/<YYMMDD_Supplier.pdf>
   // Foldering is by INVOICE DATE, not payment date.
   // Set Script Property INBOUND_FOLDER_ID. There is deliberately no default:

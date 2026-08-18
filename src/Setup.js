@@ -55,7 +55,7 @@ function ensureLedger_() {
   if (id) {
     ss = SpreadsheetApp.openById(id);
   } else {
-    ss = SpreadsheetApp.create('Finance – Invoice Ledger');
+    ss = SpreadsheetApp.create('Finance - Invoice Ledger');
     id = ss.getId();
     PropertiesService.getScriptProperties().setProperty('LEDGER_SHEET_ID', id);
   }
