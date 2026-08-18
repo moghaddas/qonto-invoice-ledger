@@ -13,14 +13,17 @@ const CFG = {
   // mail has to arrive there. Override with Script Property GMAIL_QUERY, and
   // add `to:billing@yourcompany.com` if invoices reach a shared address.
   GMAIL_QUERY_DEFAULT: 'has:attachment (invoice OR receipt OR rechnung OR beleg OR facture)',
-  // A thread carries exactly one of these — the worst state among the invoices
-  // filed from it — and leaves the Inbox only once every one of them is paid.
+  // A thread carries exactly one of these. It is the worst state among the
+  // invoices filed from that thread, and the thread leaves the Inbox only once
+  // every one of them is paid. LABEL_PREFIX puts them under a parent of your
+  // choosing, so 'Finance/Invoices' nests them two deep.
+  LABEL_PREFIX_DEFAULT: 'Invoices',
   THREAD_LABELS: {
-    ERROR:     'Finance_/Inbound Invoices/⚠️ Error',
-    REVIEW:    'Finance_/Inbound Invoices/🔎 Review',
-    UNPAID:    'Finance_/Inbound Invoices/💸 Unpaid',
-    SCHEDULED: 'Finance_/Inbound Invoices/📅 Scheduled',
-    PAID:      'Finance_/Inbound Invoices/✅ Paid'
+    ERROR:     '⚠️ Error',
+    REVIEW:    '🔎 Review',
+    UNPAID:    '💸 Unpaid',
+    SCHEDULED: '📅 Scheduled',
+    PAID:      '✅ Paid'
   },
   // Worst first: the first state present on a thread is the one it shows.
   // SCHEDULED sits with PAID on the settled side — the payment is arranged, so
@@ -129,8 +132,29 @@ function qontoAccounts_() {
              : [];
 }
 
+/** Full Gmail label name for a state, under the configured parent. */
+function labelName_(state) {
+  const prefix = String(prop_('LABEL_PREFIX', false) || CFG.LABEL_PREFIX_DEFAULT)
+    .replace(/^\/+|\/+$/g, '');
+  return prefix + '/' + CFG.THREAD_LABELS[state];
+}
+
 function reviewEmail_() {
   return prop_('REVIEW_EMAIL', false) || Session.getEffectiveUser().getEmail();
+}
+
+/**
+ * The timezone every date is formatted in. The ledger spreadsheet is created
+ * in the user's own locale, so a date read back from a cell and a date string
+ * written at capture only agree when both use the sheet's zone. They disagree
+ * by a day otherwise, and content dedupe stops working.
+ */
+let TZ_CACHE = null;
+function tz_() {
+  if (TZ_CACHE) return TZ_CACHE;
+  TZ_CACHE = SpreadsheetApp.openById(prop_('LEDGER_SHEET_ID', true))
+    .getSpreadsheetTimeZone() || Session.getScriptTimeZone();
+  return TZ_CACHE;
 }
 
 function inboundFolderId_() {

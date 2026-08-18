@@ -18,9 +18,10 @@ is all you need, use it, it is free and there is nothing to run.
 This is for what that leaves out:
 
 - **Your own archive.** Files land in your Drive as
-  `2026 Invoices/2607/260715_Supplier.pdf`, named by invoice date, under a
-  canonical supplier name you control. Your accountant gets a folder, not an
-  export.
+  `2026/2607/260715_Supplier.pdf`, named by invoice date, under a canonical
+  supplier name you control. Existing year folders are reused whatever you
+  called them, so `2026 Invoices` is picked up rather than duplicated. Your
+  accountant gets a folder, not an export.
 - **A ledger you can audit.** One row per invoice in a Google Sheet, with the
   extracted fields, the status, the matched transaction, and a note explaining
   every decision the matcher made.
@@ -43,8 +44,12 @@ Qonto is the one bank implemented. `Qonto.js` is the whole adapter.
 
 In dry run the pipeline runs end to end. Invoices are extracted, filed to
 Drive, and written to the ledger, so you can read exactly what it decided.
-What it will not do is attach anything to a bank transaction or relabel,
-archive, or move any mail. The ledger notes say what it would have attached.
+What it will not do is attach anything to a bank transaction, create or apply
+a Gmail label, archive or move any mail, or send the digest. The ledger notes
+say what it would have attached, and the execution log carries the rest.
+
+`attachManually()` refuses outright while it is on, rather than reporting a
+success it did not perform.
 
 Read the ledger, then set the `DRY_RUN` property to `false`.
 
@@ -77,6 +82,7 @@ You need a Google account, a Gemini API key from
    | `QONTO_ACCOUNT_IDS` | optional | Accounts to scan, comma separated. Unset scans all of them |
    | `GMAIL_QUERY` | optional | Overrides the search, add `to:billing@yourcompany.com` for a shared address |
    | `REVIEW_EMAIL` | optional | Digest recipient, defaults to you |
+   | `LABEL_PREFIX` | optional | Gmail parent for the state labels, default `Invoices` |
    | `DRY_RUN` | set by `setup()` | `true` until you decide otherwise |
    | `LEDGER_SHEET_ID` | set by `setup()` | Created for you |
    | `CF_AIG_ACCOUNT_ID`, `CF_AIG_GATEWAY`, `CF_AIG_TOKEN` | optional | Route Gemini through a Cloudflare AI Gateway |
@@ -114,6 +120,13 @@ is a fallback rather than the default because a vendor billing the same amount
 every month puts last month's debit in range too, and two identical candidates
 resolve to nothing.
 
+## Dates
+
+Every date is formatted in the ledger spreadsheet's own timezone, which it
+inherits from your Google account. That is what decides the folder an invoice
+files into and the day its fingerprint carries, so change the sheet's timezone
+before you file anything rather than after.
+
 ## What it costs
 
 One Gemini 2.5 Flash call per attachment, sent as raw PDF bytes with a response
@@ -131,8 +144,9 @@ hundred invoices a month is cents.
 - **Extraction is a model, not a parser.** The ledger carries the model's own
   confidence, and the digest catches what did not match, but a wrong amount
   read off an unusual layout will simply fail to find its debit.
-- **50 threads a run, 3 days back.** Both are configurable. The defaults suit
-  a steady flow, not a first-time import of a full archive.
+- **50 threads a run, 3 days back.** Both are constants in `Config.js` rather
+  than properties. The defaults suit a steady flow, not a first-time import of
+  a full archive.
 - **One currency per invoice.** A document billing in two currencies extracts
   one of them.
 

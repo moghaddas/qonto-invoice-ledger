@@ -11,12 +11,13 @@ function runReconcile() {
     .filter(function (item) { return stillMatchable_(item.obj); });
   if (!pending.length) return;
   const touched = [];
+  const pool = debitPool_(pending);
 
   pending.forEach(function (item) {
     const inv = item.obj;
     if (inv.gmailMsgId) touched.push(String(inv.gmailMsgId));
     try {
-      reconcileOne_(item.rowNumber, inv);
+      reconcileOne_(item.rowNumber, inv, pool);
     } catch (e) {
       Logger.log('Reconcile error row %s: %s', item.rowNumber, e);
       ledgerUpdate_(item.rowNumber, {
@@ -46,7 +47,29 @@ function stillMatchable_(inv) {
   return addDays_(d, CFG.MATCH_WINDOW_DAYS_AFTER) >= new Date();
 }
 
-function reconcileOne_(rowNumber, inv) {
+/**
+ * Every debit that could match any pending row, read in one pass.
+ *
+ * Reading per row instead costs one paged /transactions walk per invoice. Two
+ * dozen rows then approach the six-minute execution limit and earn a rate
+ * limit, and a rate limit surfaces as a throw the per-row catch counts as a
+ * failed attempt, so MAX_ATTEMPTS eventually parks a matchable invoice in
+ * review for a reason that has nothing to do with matching.
+ */
+function debitPool_(pending) {
+  let from = null, to = null;
+  pending.forEach(function (item) {
+    const d = item.obj.invoiceDate ? new Date(item.obj.invoiceDate) : null;
+    if (!d || isNaN(d.getTime())) return;
+    const f = addDays_(d, -CFG.MATCH_WINDOW_DAYS_BEFORE_FALLBACK);
+    const t = addDays_(d, CFG.MATCH_WINDOW_DAYS_AFTER);
+    if (!from || f < from) from = f;
+    if (!to || t > to) to = t;
+  });
+  return from ? qontoDebits_(from, to) : [];
+}
+
+function reconcileOne_(rowNumber, inv, pool) {
   const attempts = (Number(inv.attempts) || 0) + 1;
   const invoiceDate = inv.invoiceDate ? new Date(inv.invoiceDate) : null;
   if (!invoiceDate || !inv.amount || !inv.currency) {
@@ -68,9 +91,14 @@ function reconcileOne_(rowNumber, inv) {
     return d >= from && d <= to;
   });
 
-  const pool = qontoDebits_(from, to).concat(queued)
+  const scored = pool
+    .filter(function (t) {
+      const d = new Date(t.emitted_at);
+      return d >= from && d <= to;
+    })
+    .concat(queued)
     .map(function (t) { return { t: t, score: scoreMatch_(inv, t) }; });
-  const candidates = pool
+  const candidates = scored
     .filter(function (c) { return c.score.amountExact; }) // amount+currency is mandatory
     .sort(function (a, b) { return b.score.total - a.score.total; });
 
@@ -108,14 +136,14 @@ function reconcileOne_(rowNumber, inv) {
   }
 
   // No confident single match. Keep retrying until it settles or goes stale.
-  const stale = attempts >= CFG.MAX_ATTEMPTS || daysBetween_(invoiceDate, now) > CFG.STALE_REVIEW_DAYS;
+  const stale = attempts >= CFG.MAX_ATTEMPTS || daysSince_(invoiceDate, now) > CFG.STALE_REVIEW_DAYS;
   ledgerUpdate_(rowNumber, {
     status: (free.length > 1 || taken.length > 1 || scheduled.length > 1 || stale)
       ? STATUS.REVIEW : STATUS.FILED,
     attempts: attempts,
     lastCheckedAt: new Date(),
     notes: candidates.length ? describeCandidates_(strong.length ? strong : candidates)
-                             : describeNearMisses_(inv, pool)
+                             : describeNearMisses_(inv, scored)
   });
 }
 
@@ -255,17 +283,38 @@ function tokens_(s) {
  * settle with attachManually(); silence here reads as "nothing arrived", which
  * is the opposite of the truth.
  */
+/**
+ * The note a human reads before deciding whether to attach by hand, so the
+ * delta has to be in the currency the invoice is written in. Comparing a EUR
+ * account amount against a USD invoice reports the exchange rate as a
+ * shortfall and makes a correct charge look wrong.
+ */
 function describeNearMisses_(inv, pool) {
   const amt = Number(inv.amount);
+  const cur = String(inv.currency || '').toUpperCase();
   const near = pool
     .filter(function (c) { return c.score.counterparty; })
-    .map(function (c) { return { t: c.t, delta: Number(c.t.amount) - amt }; })
+    .map(function (c) {
+      const sameLocal = c.t.local_currency &&
+        String(c.t.local_currency).toUpperCase() === cur;
+      const shown = sameLocal ? Number(c.t.local_amount) : Number(c.t.amount);
+      return {
+        t: c.t,
+        comparable: sameLocal ||
+          (c.t.currency && String(c.t.currency).toUpperCase() === cur),
+        shown: shown,
+        shownCurrency: sameLocal ? c.t.local_currency : c.t.currency,
+        delta: shown - amt
+      };
+    })
     .sort(function (a, b) { return Math.abs(a.delta) - Math.abs(b.delta); });
   if (!near.length) return 'no matching debit yet';
   return 'no debit matches the amount; same counterparty: ' + near.slice(0, 2).map(function (n) {
-    return n.t.label + ' ' + n.t.amount + ' ' + n.t.currency + ' @' +
-      String(n.t.emitted_at).slice(0, 10) +
-      ' (' + (n.delta > 0 ? '+' : '') + n.delta.toFixed(2) + ') [' + n.t.id + ']';
+    const gap = n.comparable
+      ? ' (' + (n.delta > 0 ? '+' : '') + n.delta.toFixed(2) + ')'
+      : ' (different currency)';
+    return n.t.label + ' ' + n.shown + ' ' + n.shownCurrency + ' @' +
+      String(n.t.emitted_at).slice(0, 10) + gap + ' [' + n.t.id + ']';
   }).join(' | ');
 }
 
@@ -285,4 +334,9 @@ function idempotencyKey_(txnId, fileId) {
 }
 
 function addDays_(d, n) { const x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
-function daysBetween_(a, b) { return Math.abs((b - a) / 86400000); }
+/**
+ * Signed, so a future-dated document reads as negative. An absolute value
+ * marks a proforma dated two months ahead as stale on its first pass, before
+ * its payment window has opened.
+ */
+function daysSince_(d, now) { return (now - d) / 86400000; }

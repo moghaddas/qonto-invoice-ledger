@@ -7,9 +7,9 @@
 function fileInvoice_(blob, supplier, invoiceDate, invoiceNumber) {
   const root = DriveApp.getFolderById(inboundFolderId_());
   const dt = invoiceDate || new Date();
-  const yyyy = Utilities.formatDate(dt, 'Europe/Berlin', 'yyyy');
-  const yymm = Utilities.formatDate(dt, 'Europe/Berlin', 'yyMM');
-  const yymmdd = Utilities.formatDate(dt, 'Europe/Berlin', 'yyMMdd');
+  const yyyy = Utilities.formatDate(dt, tz_(), 'yyyy');
+  const yymm = Utilities.formatDate(dt, tz_(), 'yyMM');
+  const yymmdd = Utilities.formatDate(dt, tz_(), 'yyMMdd');
 
   const yearF = resolveOrCreateFolder_(root, yyyy + CFG.YEAR_FOLDER_SUFFIX, yyyy);
   const monthF = resolveOrCreateFolder_(yearF, yymm, yymm);
@@ -30,13 +30,19 @@ function fileInvoice_(blob, supplier, invoiceDate, invoiceNumber) {
  * `exactName`. Prevents parallel year/month folders when a naming convention
  * ("YYYY Inbound Invoices") already exists in the drive.
  */
+/**
+ * Reuse the folder you already keep invoices in, whatever you called it.
+ * The token has to start the name or stand as its own word: a bare substring
+ * test files 2026 into an existing "2019-2026 archive" and never says so.
+ */
 function resolveOrCreateFolder_(parent, exactName, token) {
   const exact = parent.getFoldersByName(exactName);
   if (exact.hasNext()) return exact.next();
+  const anchored = new RegExp('(^|\\s)' + token + '(\\b|_|$)');
   const it = parent.getFolders();
   while (it.hasNext()) {
     const f = it.next();
-    if (f.getName().indexOf(token) >= 0) return f;
+    if (anchored.test(f.getName())) return f;
   }
   return parent.createFolder(exactName);
 }

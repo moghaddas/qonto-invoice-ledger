@@ -120,7 +120,7 @@ function qontoScheduledTransfers_() {
   if (SCHEDULED_TRANSFER_CACHE) return SCHEDULED_TRANSFER_CACHE;
 
   const accounts = {};
-  qontoAccounts_().forEach(function (a) { accounts[a] = true; });
+  accountIds_().forEach(function (a) { accounts[a] = true; });
   const raw = [];
   let page = 1;
   for (;;) {

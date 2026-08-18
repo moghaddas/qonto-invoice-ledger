@@ -5,7 +5,7 @@
 function runDigest() {
   const review = ledgerFindByStatus_([STATUS.REVIEW, STATUS.ERROR]);
   const stillFiled = ledgerFindByStatus_([STATUS.FILED]).filter(function (i) {
-    return i.obj.invoiceDate && daysBetween_(new Date(i.obj.invoiceDate), new Date()) > CFG.STALE_REVIEW_DAYS;
+    return i.obj.invoiceDate && daysSince_(new Date(i.obj.invoiceDate), new Date()) > CFG.STALE_REVIEW_DAYS;
   });
   const items = review.concat(stillFiled);
   if (!items.length) return;
@@ -23,9 +23,14 @@ function runDigest() {
   html += '</table><p style="color:#666">To resolve a row manually, put the Qonto transaction id in the ' +
     'ledger and run <code>attachManually(rowNumber, transactionId)</code>.</p>';
 
+  if (dryRun_()) {
+    Logger.log('[dry-run] would email %s about %s invoice(s) to review',
+               reviewEmail_(), items.length);
+    return;
+  }
   MailApp.sendEmail({
     to: reviewEmail_(),
-    subject: 'Invoice reconciliation – ' + items.length + ' to review',
+    subject: 'Invoice reconciliation: ' + items.length + ' to review',
     htmlBody: html
   });
 }
@@ -35,6 +40,9 @@ function runDigest() {
  * automatic matcher left in NEEDS_REVIEW.
  */
 function attachManually(rowNumber, transactionId) {
+  // Refuse rather than preview. This one is typed by hand to make something
+  // happen, so reporting success while attaching nothing is the worst answer.
+  if (dryRun_()) throw new Error('DRY_RUN is on. Set it to false to attach.');
   const sh = ledgerSheet_();
   const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   const inv = rowToObj_(headers, sh.getRange(rowNumber, 1, 1, headers.length).getValues()[0]);

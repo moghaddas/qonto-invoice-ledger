@@ -24,16 +24,16 @@ function ledgerReadAll_() {
  * Content fingerprint for dedupe — stable across re-captures and Drive lag.
  * The invoice number is the vendor's own identifier for the document, so it
  * wins whenever there is one: extraction names the same vendor inconsistently
- * ("Powerplay GmbH" vs "Powerplay GmbH (Cello)"), and a supplier-keyed
+ * ("Acme GmbH" against "Acme GmbH (Cloud)"), and a supplier-keyed
  * fingerprint files one invoice twice on nothing but that wording.
  */
 function fpKey_(supplier, invoiceDate, amount, currency, invoiceNumber) {
   const amt = (Number(amount) || 0).toFixed(2);
   const cur = String(currency || '').toUpperCase().trim();
   const inv = String(invoiceNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  // The date stays in the key even with a number present: some vendors repeat a
-  // number across months (ElevenLabs bills AAMN7HEH-0005 in June and again in
-  // July), and a number-only key would merge two real invoices into one.
+  // The date stays in the key even when a number is present. Some vendors
+  // reuse one invoice number across months, and a number-only key would merge
+  // two real invoices into one.
   const head = inv.length >= 4 ? ['no', inv] : ['su', String(supplier || '').toLowerCase().trim()];
   return head.concat([fpDate_(invoiceDate), amt, cur]).join('|');
 }
@@ -45,7 +45,7 @@ function fpKey_(supplier, invoiceDate, amount, currency, invoiceNumber) {
  * and every re-send is filed as a new invoice.
  */
 function fpDate_(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, 'Europe/Berlin', 'yyyy-MM-dd');
+  if (v instanceof Date) return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
   return String(v || '').trim().slice(0, 10);
 }
 
@@ -121,7 +121,12 @@ function ledgerThreadStates_() {
 
 function ledgerAppend_(record) {
   const sh = ledgerSheet_();
-  const row = CFG.LEDGER_HEADERS.map(function (h) {
+  // Built from the row on the sheet, not from CFG.LEDGER_HEADERS. ensureTab_
+  // adds a new header at the end, so an installation that upgrades across one
+  // holds a column order the constant no longer describes, and a positional
+  // write would put every value one column out.
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const row = headers.map(function (h) {
     return record[h] === undefined || record[h] === null ? '' : record[h];
   });
   sh.appendRow(row);

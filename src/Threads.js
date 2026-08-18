@@ -10,7 +10,7 @@
 function ensureGmailLabels_() {
   const colourByName = {};
   Object.keys(CFG.THREAD_LABELS).forEach(function (state) {
-    const name = CFG.THREAD_LABELS[state];
+    const name = labelName_(state);
     // Gmail groups a nested label under its parents only when every ancestor
     // exists as a label of its own. Without them the sidebar shows one flat
     // entry with literal slashes in the name.
@@ -49,7 +49,7 @@ function applyLabelColours_(colourByName) {
 function threadLabels_() {
   const out = {};
   Object.keys(CFG.THREAD_LABELS).forEach(function (state) {
-    const name = CFG.THREAD_LABELS[state];
+    const name = labelName_(state);
     out[state] = GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
   });
   return out;
@@ -65,7 +65,9 @@ function syncThreads_(gmailMsgIds) {
   if (!ids.length) return;
 
   const stateByMsg = ledgerThreadStates_();
-  const labels = threadLabels_();
+  // Skipped under a dry run: syncThread_ applies nothing, and building this
+  // creates the five labels as a side effect.
+  const labels = dryRun_() ? {} : threadLabels_();
   const snoozed = snoozedThreadIds_();
   const seenThread = {};
 
@@ -104,10 +106,10 @@ function syncThread_(thread, stateByMsg, labels, snoozed) {
   thread.getLabels().forEach(function (l) { has[l.getName()] = true; });
   // Read before the labels change: it says which side the thread was on last run.
   const wasSettled = CFG.THREAD_STATES_SETTLED.some(function (s) {
-    return has[CFG.THREAD_LABELS[s]];
+    return has[labelName_(s)];
   });
   CFG.THREAD_STATE_ORDER.forEach(function (s) {
-    const name = CFG.THREAD_LABELS[s];
+    const name = labelName_(s);
     if (preview) return;
     if (s === worst) { if (!has[name]) thread.addLabel(labels[s]); }
     else if (has[name]) thread.removeLabel(labels[s]);
@@ -154,7 +156,7 @@ function sweepSettledInInbox_() {
   const threads = [];
   const seen = {};
   CFG.THREAD_STATES_SETTLED.forEach(function (state) {
-    const label = GmailApp.getUserLabelByName(CFG.THREAD_LABELS[state]);
+    const label = GmailApp.getUserLabelByName(labelName_(state));
     if (!label) return;
     label.getThreads(0, 100).forEach(function (t) {
       if (t.isInInbox() && !seen[t.getId()]) { seen[t.getId()] = true; threads.push(t); }
@@ -184,7 +186,8 @@ function threadOf_(msgId) {
  * @return {string} summary, also written to the execution log
  */
 function restoreUnpaidToInbox() {
-  ensureGmailLabels_();
+  const preview = dryRun_();
+  if (!preview) ensureGmailLabels_();
   const stateByMsg = ledgerThreadStates_();
   const labels = threadLabels_();
   const snoozed = snoozedThreadIds_();
@@ -203,12 +206,17 @@ function restoreUnpaidToInbox() {
     // A snoozed invoice was put aside on purpose until its payment date.
     // Pulling it into the Inbox would cancel that, so leave it alone.
     if (snoozed[thread.getId()]) { leftSnoozed++; return; }
-    thread.moveToInbox();
+    if (preview) {
+      Logger.log('[dry-run] would move thread %s back to the Inbox', thread.getId());
+    } else {
+      thread.moveToInbox();
+    }
     restored++;
   });
 
-  const summary = relabelled + ' thread(s) re-labelled, ' + restored +
-    ' moved back to the Inbox, ' + leftSnoozed + ' left snoozed';
+  const summary = (preview ? '[dry-run] ' : '') + relabelled +
+    ' thread(s) re-labelled, ' + restored + ' moved back to the Inbox, ' +
+    leftSnoozed + ' left snoozed';
   Logger.log(summary);
   return summary;
 }

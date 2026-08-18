@@ -1,5 +1,5 @@
 {
-  "timeZone": "Europe/Berlin",
+  "timeZone": "Etc/UTC",
   "dependencies": {
     "enabledAdvancedServices": [
       {

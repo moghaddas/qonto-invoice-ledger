@@ -9,9 +9,13 @@ function setup() {
   // Settings rather than an unset property the reader has to know about.
   if (props.getProperty('DRY_RUN') === null) props.setProperty('DRY_RUN', 'true');
 
-  const missing = ['INBOUND_FOLDER_ID', 'QONTO_SECRET_KEY'].filter(function (k) {
-    return !props.getProperty(k);
-  });
+  const required = ['INBOUND_FOLDER_ID', 'QONTO_SECRET_KEY'];
+  // A gateway holding the Google key through BYOK is the one case that needs
+  // no key of its own.
+  if (!(props.getProperty('CF_AIG_ACCOUNT_ID') && props.getProperty('CF_AIG_GATEWAY'))) {
+    required.push('GEMINI_API_KEY');
+  }
+  const missing = required.filter(function (k) { return !props.getProperty(k); });
   if (missing.length) {
     throw new Error('Set these Script Properties first: ' + missing.join(', '));
   }
@@ -59,8 +63,10 @@ function ensureLedger_() {
   const sup = ensureTab_(ss, CFG.SUPPLIERS_TAB, CFG.SUPPLIERS_HEADERS);
   if (sup.getLastRow() < 2) {
     // Seed a couple of examples so the mapping shape is obvious.
-    sup.appendRow(['domain', 'anthropic.com', 'Anthropic']);
-    sup.appendRow(['contains', 'google workspace', 'Google_Workspace']);
+    // Two shapes rather than two real vendors: match on the sending domain,
+    // or on a phrase inside the name the model extracted.
+    sup.appendRow(['domain', 'example-vendor.com', 'Example_Vendor']);
+    sup.appendRow(['contains', 'cloud hosting', 'Cloud_Hosting']);
   }
   return ss;
 }

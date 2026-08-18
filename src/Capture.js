@@ -87,7 +87,15 @@ function processAttachment_(msg, att, fps) {
     return 'SKIPPED';
   }
 
-  const data = geminiExtract_(att.copyBlob());
+  let data;
+  try {
+    data = geminiExtract_(att.copyBlob());
+  } catch (e) {
+    // No ledger row: seenMessageIds_ indexes every row whatever its status, so
+    // writing one here would skip this message on every later run.
+    Logger.log('extraction failed for %s, will retry: %s', att.getName(), e);
+    return 'SKIPPED';
+  }
   if (!data || !data.isInvoice) {
     ledgerAppend_(base({ supplierRaw: (data && data.supplier) || '', status: STATUS.NOT_INVOICE, notes: att.getName() }));
     return 'SKIPPED';
@@ -104,7 +112,7 @@ function processAttachment_(msg, att, fps) {
 
   const supplier = resolveSupplier_(senderDomain_(msg.getFrom()), data.supplier);
   const invoiceDate = normalizeDate_(data.invoiceDate);
-  const isoDate = invoiceDate ? Utilities.formatDate(invoiceDate, 'Europe/Berlin', 'yyyy-MM-dd') : '';
+  const isoDate = invoiceDate ? Utilities.formatDate(invoiceDate, tz_(), 'yyyy-MM-dd') : '';
   const amount = Number(data.amount) || 0;
   const currency = (data.currency || '').toUpperCase();
 

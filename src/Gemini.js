@@ -101,16 +101,19 @@ function geminiExtract_(blob) {
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
+  // Throw rather than return null. A rate limit or a gateway timeout is a
+  // failure to read the document, not a decision that it is not an invoice,
+  // and the two must not reach the caller as the same value: recording a
+  // transient failure as a classification loses the invoice for good.
   if (res.getResponseCode() !== 200) {
-    Logger.log('Gemini error %s: %s', res.getResponseCode(), res.getContentText().slice(0, 500));
-    return null;
+    throw new Error('Gemini ' + res.getResponseCode() + ': ' +
+                    res.getContentText().slice(0, 300));
   }
   try {
     const body = JSON.parse(res.getContentText());
     const text = body.candidates[0].content.parts[0].text;
     return JSON.parse(text);
   } catch (e) {
-    Logger.log('Gemini parse failure: %s', e);
-    return null;
+    throw new Error('Gemini returned an unreadable body: ' + e);
   }
 }
