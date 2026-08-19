@@ -1,12 +1,13 @@
-# gmail-invoice-ledger
+# qonto-invoice-ledger
 
 Supplier invoices arrive as email attachments and have to end up in three
 places: a folder your accountant can read, a list you can audit, and against
 the right line on your bank statement. This does all three from Gmail, on a
-schedule, in Google Apps Script.
+schedule, in Google Apps Script. The bank is **Qonto**, and it is the only one
+implemented.
 
 ```
-Gmail search  ->  Gemini extract  ->  Drive archive  ->  Sheet ledger  ->  bank match
+Gmail search  ->  Gemini extract  ->  Drive archive  ->  Sheet ledger  ->  Qonto match
 ```
 
 ## What this adds to Qonto
@@ -35,7 +36,7 @@ What that leaves out:
   comes from the ledger, not the label, so a hand edit is corrected on the next
   run.
 
-Qonto is the one bank implemented. `Qonto.js` is the whole adapter.
+`Qonto.js` is the whole adapter.
 
 ## Dry run
 
