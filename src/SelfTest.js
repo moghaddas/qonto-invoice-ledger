@@ -32,9 +32,11 @@ function selfTest() {
     const mode = prop_('CF_AIG_GATEWAY', false) ? 'ai-gateway' : 'direct-google';
     const hasGoogleKey = prop_('GEMINI_API_KEY', false) ? 'yes' : 'no(byok?)';
     const hasQonto = prop_('QONTO_SECRET_KEY', false) ? 'yes' : 'MISSING';
+    const ownCompany = ownCompanyName_() ||
+      'NOT SET - every document will file as a bill you owe, including your own outgoing invoices';
     return 'gemini=' + mode + ', googleKey=' + hasGoogleKey +
            ', qontoKey=' + hasQonto + ', accounts=' + qontoAccounts_().length +
-           ', inbound=' + inboundFolderId_();
+           ', inbound=' + inboundFolderId_() + ', ownCompanyName=' + ownCompany;
   });
 
   let extracted = null;
