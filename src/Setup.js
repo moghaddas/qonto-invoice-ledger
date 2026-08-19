@@ -29,6 +29,12 @@ function setup() {
                'but nothing is attached to a transaction and no mail moves. ' +
                'Set DRY_RUN to false once the ledger looks right.');
   }
+  if (!ownCompanyName_()) {
+    Logger.log('WARNING: OWN_COMPANY_NAME is not set. Every document will file ' +
+               'as a bill you owe, including invoices you issue to your own ' +
+               'customers. Set OWN_COMPANY_NAME in Script Properties before you ' +
+               'turn DRY_RUN off, or your outgoing invoices will corrupt the ledger.');
+  }
 }
 
 function installTriggers_() {
