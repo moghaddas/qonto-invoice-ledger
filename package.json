@@ -1,5 +1,5 @@
 {
-  "name": "gmail-invoice-ledger",
+  "name": "qonto-invoice-ledger",
   "private": true,
   "description": "Maintainer tooling to push src/ to the canonical Apps Script project via clasp.",
   "scripts": {
