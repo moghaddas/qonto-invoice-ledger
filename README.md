@@ -57,15 +57,16 @@ Read the ledger, then set the `DRY_RUN` property to `false`.
 You need a Google account, a Gemini API key from
 [AI Studio](https://aistudio.google.com/apikey), and a Qonto API key.
 
-1. Create a new Apps Script project and copy the files from `src/` into it,
-   or push them with [clasp](https://github.com/google/clasp):
+1. Open the shared Apps Script project and choose **File > Make a copy**,
+   which puts the whole project in your own Drive with your own trigger and
+   Script Property scope:
 
-   ```
-   npm i -g @google/clasp
-   clasp login
-   clasp create --type standalone --title "Invoice ledger" --rootDir src
-   clasp push
-   ```
+   `[TODO: canonical Apps Script "Make a copy" URL — set by the maintainer]`
+
+   Or copy the files from `src/` by hand into a new standalone Apps Script
+   project. Either way, the account you copy into is the account that ends up
+   holding your Gemini key, your Qonto key, and your Drive archive: nothing
+   here can set those up for you.
 
 2. Create a Drive folder for the archive and copy its id out of the URL.
 
@@ -149,6 +150,24 @@ A few hundred invoices a month is cents.
   a full archive.
 - **One currency per invoice.** A document billing in two currencies extracts
   one of them.
+
+## Maintainer
+
+This section covers keeping the canonical shared Apps Script project in sync
+with `src/`. It is not part of the user install above.
+
+```
+npm install
+cp .clasp.json.example .clasp.json   # fill in the real scriptId
+npx clasp login                      # one-time, opens a Google OAuth prompt
+npm run push
+```
+
+`clasp login` needs the Apps Script API enabled on the maintainer's own
+Google account (script.google.com -> Settings -> Google Apps Script API).
+This is a manual, one-time step in the Google account settings UI; no script
+or CLI flag can turn it on from outside. `.clasp.json` holds the real
+`scriptId` and stays out of git; only `.clasp.json.example` is committed.
 
 ## License
 
