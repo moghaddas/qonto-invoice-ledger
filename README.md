@@ -80,6 +80,7 @@ You need a Google account, a Gemini API key from
    | `QONTO_LOGIN` | if your key is a `login:secret` pair | |
    | `QONTO_ACCOUNT_IDS` | optional | Accounts to scan, comma separated. Unset scans every one the key can read |
    | `GMAIL_QUERY` | optional | Overrides the search, add `to:billing@yourcompany.com` for a shared address |
+   | `GEMINI_MODEL` | optional | Overrides the extraction model, default `gemini-2.5-flash` |
    | `REVIEW_EMAIL` | optional | Digest recipient, defaults to you |
    | `LABEL_PREFIX` | optional | Gmail parent for the state labels, default `Invoices` |
    | `DRY_RUN` | set by `setup()` | `true` until you decide otherwise |

@@ -51,7 +51,7 @@ function extractPrompt_() {
  * @return {Object|null} extracted fields or null on hard failure
  */
 function geminiEndpoint_() {
-  const model = CFG.GEMINI_MODEL;
+  const model = geminiModel_();
   const googleKey = prop_('GEMINI_API_KEY', false);
   const aigToken = prop_('CF_AIG_TOKEN', false);
 
