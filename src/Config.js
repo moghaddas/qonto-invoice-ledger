@@ -82,7 +82,7 @@ const CFG = {
   // to nothing.
   MATCH_WINDOW_DAYS_BEFORE_FALLBACK: 35,
   MATCH_WINDOW_DAYS_AFTER: 60,   // ...or settle well after it
-  AMOUNT_TOLERANCE: 0.02,        // EUR cents rounding on exact-amount compare
+  AMOUNT_TOLERANCE: 0.02,        // absolute, currency-agnostic; assumes a two-decimal minor unit
   NAME_MATCH_MIN: 0.34,          // token-overlap ratio to count as a name hit
   MAX_ATTEMPTS: 12,              // give up auto-matching after this many runs
   STALE_REVIEW_DAYS: 21,         // unmatched older than this -> flag in digest
@@ -163,6 +163,11 @@ function inboundFolderId_() {
 
 function gmailQuery_() {
   return prop_('GMAIL_QUERY', false) || CFG.GMAIL_QUERY_DEFAULT;
+}
+
+/** Override with Script Property GEMINI_MODEL to switch models without a code push. */
+function geminiModel_() {
+  return prop_('GEMINI_MODEL', false) || CFG.GEMINI_MODEL;
 }
 
 /**
