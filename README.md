@@ -61,7 +61,11 @@ You need a Google account, a Gemini API key from
    which puts the whole project in your own Drive with your own trigger and
    Script Property scope:
 
-   `[TODO: canonical Apps Script "Make a copy" URL — set by the maintainer]`
+   <https://script.google.com/d/1IL0jBeggRfv1eJDNwck-vdNcFEwKWWoyciPRLTIVTSTFhs9CXy2Y4seK/edit>
+
+   Sign in to Google first. The link opens the project read-only, and the
+   copy is yours to edit. Apps Script has no direct copy URL, so the copy
+   happens inside the editor.
 
    Or copy the files from `src/` by hand into a new standalone Apps Script
    project. Either way, the account you copy into is the account that ends up
