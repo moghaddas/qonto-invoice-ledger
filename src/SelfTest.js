@@ -51,6 +51,35 @@ function selfTest() {
            ', no=' + extracted.invoiceNumber + ', conf=' + extracted.confidence;
   });
 
+  // A PDF sent as application/octet-stream is the shape that silently drops an
+  // invoice: it is filtered out before any ledger row exists.
+  step('attachment-type', function () {
+    const fake = function (name, type) {
+      return {
+        getName: function () { return name; },
+        getContentType: function () { return type; }
+      };
+    };
+    const cases = [
+      ['a.pdf',  'application/pdf',              'application/pdf'],
+      ['a.pdf',  'application/octet-stream',     'application/pdf'],
+      ['A.PDF',  'application/octet-stream',     'application/pdf'],
+      ['a.jpg',  'application/octet-stream',     'image/jpeg'],
+      ['a.png',  'binary/octet-stream',          'image/png'],
+      ['a.pdf',  'application/pdf; charset=bin', 'application/pdf'],
+      ['a.docx', 'application/octet-stream',     ''],
+      ['a.zip',  'application/zip',              ''],
+      ['note',   'application/octet-stream',     '']
+    ];
+    cases.forEach(function (c) {
+      const got = attachmentType_(fake(c[0], c[1]));
+      if (got !== c[2]) {
+        throw new Error(c[0] + ' + ' + c[1] + ' -> "' + got + '", expected "' + c[2] + '"');
+      }
+    });
+    return cases.length + ' cases';
+  });
+
   // Guards the seam every filing path shares: capture, the extraction retry and
   // reprocessRow all decide an outcome through classifyAttachment_.
   step('classify-and-file', function () {

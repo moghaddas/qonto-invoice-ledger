@@ -96,7 +96,7 @@ function reprocessRow(rowNumber) {
   const att = messageAttachment_(String(o.gmailMsgId), String(o.driveFileName || ''));
   if (!att) throw new Error('No matching attachment on message ' + o.gmailMsgId);
 
-  const patch = classifyAttachment_(o.sender, att, geminiExtract_(att.copyBlob()), contentFingerprints_());
+  const patch = classifyAttachment_(o.sender, att, geminiExtract_(attachmentBlob_(att)), contentFingerprints_());
   patch.lastCheckedAt = new Date();
   ledgerUpdate_(rowNumber, patch);
   syncThreads_([String(o.gmailMsgId)]);
@@ -127,7 +127,7 @@ function fileManually(rowNumber, meta) {
   const att = messageAttachment_(String(o.gmailMsgId), String(o.driveFileName || ''));
   if (!att) throw new Error('No matching attachment on message ' + o.gmailMsgId);
 
-  const filed = fileInvoice_(att.copyBlob(), supplier, invoiceDate, meta.invoiceNumber);
+  const filed = fileInvoice_(attachmentBlob_(att), supplier, invoiceDate, meta.invoiceNumber);
   ledgerUpdate_(rowNumber, {
     supplier: supplier,
     supplierRaw: o.supplierRaw || supplier,
