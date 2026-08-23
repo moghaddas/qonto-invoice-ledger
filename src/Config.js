@@ -86,6 +86,12 @@ const CFG = {
   NAME_MATCH_MIN: 0.34,          // token-overlap ratio to count as a name hit
   MAX_ATTEMPTS: 12,              // give up auto-matching after this many runs
   STALE_REVIEW_DAYS: 21,         // unmatched older than this -> flag in digest
+  // Extraction failures are transient (rate limit, timeout, unreadable body).
+  // The cap stops a document the model can never read from retrying for ever.
+  MAX_EXTRACT_ATTEMPTS: 4,
+  // How far back the digest lists not-an-invoice verdicts. One week matches the
+  // digest interval, so each verdict is shown exactly once.
+  DIGEST_SKIP_LOOKBACK_DAYS: 7,
 
   // --- Ledger sheet ---
   LEDGER_TAB: 'Ledger',
@@ -106,7 +112,13 @@ const STATUS = {
   REVIEW: 'NEEDS_REVIEW',      // ambiguous or no confident match
   DUPLICATE: 'DUPLICATE',      // same supplier+date+amount+currency already filed
   ERROR: 'ERROR',
-  NOT_INVOICE: 'SKIPPED_NOT_INVOICE'
+  // A model verdict, so it can be wrong: the digest lists these rows.
+  NOT_INVOICE: 'SKIPPED_NOT_INVOICE',
+  // Rule-decided (issued by you, outbound, self-billed). It cannot be wrong the
+  // way a model verdict can, so the digest stays quiet about it.
+  OUT_OF_SCOPE: 'SKIPPED_OUT_OF_SCOPE',
+  // The call failed, carrying no verdict about the document. The row is retried.
+  EXTRACT_FAILED: 'EXTRACT_FAILED'
 };
 
 /**
@@ -115,6 +127,7 @@ const STATUS = {
  */
 const THREAD_STATE_BY_STATUS = {};
 THREAD_STATE_BY_STATUS[STATUS.ERROR] = 'ERROR';
+THREAD_STATE_BY_STATUS[STATUS.EXTRACT_FAILED] = 'ERROR';
 THREAD_STATE_BY_STATUS[STATUS.REVIEW] = 'REVIEW';
 THREAD_STATE_BY_STATUS[STATUS.FILED] = 'UNPAID';
 THREAD_STATE_BY_STATUS[STATUS.SCHEDULED] = 'SCHEDULED';
