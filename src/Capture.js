@@ -44,9 +44,42 @@ function runCapture() {
   syncThreads_(touched);
 }
 
+const MIME_BY_EXTENSION = {
+  pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png'
+};
+
+/**
+ * The type to treat an attachment as, or '' when it is not a document we read.
+ * Senders routinely attach a PDF as application/octet-stream, so the declared
+ * type alone drops real invoices; the extension decides when it is generic.
+ */
+function attachmentType_(att) {
+  const declared = String(att.getContentType() || '').split(';')[0].trim().toLowerCase();
+  if (declared === 'application/pdf' || declared === 'image/jpeg' || declared === 'image/png') {
+    return declared;
+  }
+  if (declared && declared !== 'application/octet-stream' && declared !== 'binary/octet-stream') {
+    return '';
+  }
+  const m = /\.([a-z0-9]+)$/i.exec(String(att.getName() || ''));
+  return m ? (MIME_BY_EXTENSION[m[1].toLowerCase()] || '') : '';
+}
+
 function isSupportedAttachment_(att) {
-  const t = att.getContentType();
-  return t === 'application/pdf' || t === 'image/jpeg' || t === 'image/png';
+  return !!attachmentType_(att);
+}
+
+/**
+ * A copy of the attachment carrying its resolved type. Both consumers read the
+ * blob's own content type -- extraction sends it as inline_data.mime_type, and
+ * the Drive filename extension is derived from it -- so an octet-stream blob
+ * reaches the model unreadable and lands on disk named .jpg.
+ */
+function attachmentBlob_(att) {
+  const blob = att.copyBlob();
+  const type = attachmentType_(att);
+  if (type && blob.getContentType() !== type) blob.setContentType(type);
+  return blob;
 }
 
 /**
@@ -95,7 +128,7 @@ function processAttachment_(msg, att, fps) {
 
   let data;
   try {
-    data = geminiExtract_(att.copyBlob());
+    data = geminiExtract_(attachmentBlob_(att));
   } catch (e) {
     // Writing no row loses the document once the search window passes it. The
     // row keeps the attachment name so retryFailedExtractions_ finds it again.
@@ -154,7 +187,7 @@ function classifyAttachment_(from, att, data, fps) {
     });
   }
 
-  const filed = fileInvoice_(att.copyBlob(), supplier, invoiceDate, data.invoiceNumber);
+  const filed = fileInvoice_(attachmentBlob_(att), supplier, invoiceDate, data.invoiceNumber);
   fps[fp] = true;
   return Object.assign(common, {
     driveFileId: filed.id,
@@ -221,7 +254,7 @@ function retryFailedExtractions_(fps) {
 
     let data;
     try {
-      data = geminiExtract_(att.copyBlob());
+      data = geminiExtract_(attachmentBlob_(att));
     } catch (e) {
       ledgerUpdate_(item.rowNumber, {
         attempts: attempts + 1, lastCheckedAt: new Date(), notes: String(e).slice(0, 300)
