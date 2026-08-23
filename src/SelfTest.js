@@ -51,6 +51,18 @@ function selfTest() {
            ', no=' + extracted.invoiceNumber + ', conf=' + extracted.confidence;
   });
 
+  // Guards the seam every filing path shares: capture, the extraction retry and
+  // reprocessRow all decide an outcome through classifyAttachment_.
+  step('classify-and-file', function () {
+    if (!extracted) throw new Error('no extraction to classify');
+    const patch = classifyAttachment_('billing@acme-cloud.example', sample.copyBlob(), extracted, {});
+    if (patch.status !== STATUS.FILED) {
+      throw new Error('expected FILED, got ' + patch.status + ' (' + patch.notes + ')');
+    }
+    DriveApp.getFileById(patch.driveFileId).setTrashed(true); // clean up immediately
+    return 'FILED as ' + patch.driveFileName + ', supplier=' + patch.supplier;
+  });
+
   step('drive-file', function () {
     const supplier = 'SelfTest ' + ((extracted && extracted.supplier) || 'Vendor');
     const filed = fileInvoice_(sample.copyBlob(), supplier, new Date(), 'SELFTEST');
