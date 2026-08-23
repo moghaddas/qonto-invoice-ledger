@@ -148,8 +148,10 @@ A few hundred invoices a month is cents.
   address has to land there, through delivery or forwarding. A group alias
   nobody receives is invisible.
 - **Extraction is a model, not a parser.** The ledger flags a low-confidence
-  read and the digest catches what did not match, but a wrong amount taken off
-  an unusual layout will never find its debit.
+  read, the digest catches what did not match and lists every not-an-invoice
+  verdict from the past week, and `fileManually()` files a document the model
+  refuses. A wrong amount taken off an unusual layout still never finds its
+  debit.
 - **50 threads a run, 3 days back.** Both are constants in `Config.js` rather
   than properties. The defaults suit a steady flow, not a first-time import of
   a full archive.
