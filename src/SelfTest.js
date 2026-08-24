@@ -51,6 +51,63 @@ function selfTest() {
            ', no=' + extracted.invoiceNumber + ', conf=' + extracted.confidence;
   });
 
+  // Matching runs against live bank data, so these cases are the only place the
+  // scoring rules are pinned: an FX band that stands alone, or a tiebreak that
+  // guesses between two close charges, attaches a receipt to the wrong payment.
+  step('match-scoring', function () {
+    const txn = function (label, amount, currency, localAmount, localCurrency, emitted) {
+      return {
+        label: label, amount: amount, currency: currency,
+        local_amount: localAmount, local_currency: localCurrency,
+        emitted_at: emitted, reference: '', note: null, clean_counterparty_name: label
+      };
+    };
+    const score = function (inv, t) { return { t: t, score: scoreMatch_(inv, t) }; };
+    const expect = function (name, cond) { if (!cond) throw new Error(name); };
+
+    // A vendor billing in USD, settled in EUR, with the USD original preserved.
+    const el = { supplier: 'Eleven Labs Inc.', supplierRaw: 'Eleven Labs Inc.', amount: 1600, currency: 'USD' };
+    const elc = [
+      score(el, txn('ELEVENLABS.IO', 1404.74, 'EUR', 1600, 'USD', '2026-06-13')),
+      score(el, txn('ELEVENLABS.IO', 1387.56, 'EUR', 1600, 'USD', '2026-07-12')),
+      score(el, txn('ELEVENLABS.IO', 1365.19, 'EUR', 1600, 'USD', '2026-05-12'))
+    ];
+    expect('local_amount should match exactly', elc.every(function (c) { return c.score.amountExact && c.score.strong; }));
+    expect('tiebreak should take the nearest charge',
+      nearestByDate_(elc, new Date('2026-06-12')).t.amount === 1404.74);
+
+    // The card network converted first, so no amount is in the invoice currency.
+    const gr = { supplier: 'Granola', supplierRaw: 'Granola', amount: 14, currency: 'USD' };
+    const grc = [
+      score(gr, txn('GRANOLA INC', 12.45, 'EUR', 12.45, 'EUR', '2026-07-21')),
+      score(gr, txn('GRANOLA INC', 12.73, 'EUR', 12.73, 'EUR', '2026-06-21')),
+      score(gr, txn('GRANOLA INC', 12.69, 'EUR', 12.69, 'EUR', '2026-08-21'))
+    ];
+    expect('converted band should match', grc.every(function (c) {
+      return !c.score.amountExact && c.score.amountConverted && c.score.strong;
+    }));
+    expect('tiebreak should take the nearest converted charge',
+      nearestByDate_(grc, new Date('2026-07-20')).t.amount === 12.45);
+
+    // A different vendor whose amount collides inside AMOUNT_TOLERANCE.
+    const ins = { supplier: 'Instantly', supplierRaw: 'Instantly', amount: 49.99, currency: 'USD' };
+    const collide = scoreMatch_(ins, txn('TWILIO.COM', 42.7, 'EUR', 50.01, 'USD', '2026-06-01'));
+    expect('colliding amount still matches', collide.amountExact);
+    expect('but the name gate must reject it', !collide.strong);
+
+    expect('the band must not stand alone',
+      !scoreMatch_(gr, txn('SOME RANDOM SHOP', 12.5, 'EUR', 12.5, 'EUR', '2026-07-21')).amountOk);
+    expect('the band must not fire on a comparable currency',
+      !scoreMatch_({ supplier: 'Granola', supplierRaw: 'Granola', amount: 14, currency: 'EUR' },
+                   txn('GRANOLA INC', 12.45, 'EUR', 12.45, 'EUR', '2026-07-21')).amountOk);
+    expect('two close charges must not auto-pick', nearestByDate_([
+      score(gr, txn('GRANOLA INC', 12.45, 'EUR', 12.45, 'EUR', '2026-07-21')),
+      score(gr, txn('GRANOLA INC', 12.50, 'EUR', 12.50, 'EUR', '2026-07-26'))
+    ], new Date('2026-07-20')) === null);
+
+    return '9 cases';
+  });
+
   // A PDF sent as application/octet-stream is the shape that silently drops an
   // invoice: it is filtered out before any ledger row exists.
   step('attachment-type', function () {
