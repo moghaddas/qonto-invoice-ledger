@@ -105,26 +105,37 @@ You need a Google account, a Gemini API key from
 
 ## How matching works
 
-A candidate has to agree on amount and currency, against either the account
-figure or the original one on a foreign-currency charge. That alone is never
-enough. A **strong** match also needs one of:
+A candidate has to agree on amount. That figure comes from the account amount,
+or from the original amount on a foreign-currency charge, or from a band around
+the converted amount when neither is in the invoice currency. The third case is
+a card network converting before the bank records the charge, which leaves no
+exact figure to compare. That alone is never enough. A **strong** match also
+needs one of:
 
 - the supplier name inside the transaction label, reference, note, or
   counterparty name, above a token-overlap threshold
-- the invoice number inside the payment reference
+- the invoice number inside the reference, note, or label. A card charge
+  carries no reference, so this fires only on a transfer
 - the vendor IBAN equal to the transfer counterparty, the strongest signal
+
+The converted band is wide enough to absorb an unknown rate and a card fee, so
+it never counts on its own. It needs one of the three above as well.
 
 Exactly one strong match with no receipt on it attaches. If that transaction
 already carries a receipt, the row links to it without uploading a second copy,
-which is how an invoice you reconciled by hand in Qonto closes. Two candidates
-settle nothing and go to review.
+which is how an invoice you reconciled by hand in Qonto closes.
+
+Several strong matches resolve to the one nearest the invoice date, and only
+when it leads the next by `MATCH_DATE_MARGIN_DAYS`. A vendor billing the same
+amount every month puts several identical charges in the window: the right one
+sits within days of its invoice and its siblings a month away. Two charges too
+close to separate settle nothing and go to review.
 
 The search runs from 5 days before the invoice to 60 days after. A subscription
 charged at the start of a period and invoiced at the end sits outside that, so
 a tight window holding no strong match widens to 35 days before. The wider span
-is a fallback rather than the default: a vendor billing the same amount every
-month puts last month's debit in range too, and two identical candidates
-resolve to nothing.
+stays a fallback rather than the default, because it brings last month's debit
+into range on every monthly vendor.
 
 ## Dates
 
