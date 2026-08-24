@@ -99,7 +99,7 @@ function reconcileOne_(rowNumber, inv, pool) {
     .concat(queued)
     .map(function (t) { return { t: t, score: scoreMatch_(inv, t) }; });
   const candidates = scored
-    .filter(function (c) { return c.score.amountExact; }) // amount+currency is mandatory
+    .filter(function (c) { return c.score.amountOk; }) // an agreeing amount is mandatory
     .sort(function (a, b) { return b.score.total - a.score.total; });
 
   // The tight window wins whenever it holds a strong match. Only an empty tight
@@ -119,19 +119,22 @@ function reconcileOne_(rowNumber, inv, pool) {
   // A debit with no receipt is the one to attach to. Falling back to a debit
   // that already has one settles an invoice reconciled by hand in Qonto:
   // attachAndMark_ re-checks live and links it without uploading a second copy.
-  if (free.length === 1) {
-    attachAndMark_(rowNumber, inv, free[0].t);
+  const freePick = nearestByDate_(free, invoiceDate);
+  if (freePick) {
+    attachAndMark_(rowNumber, inv, freePick.t);
     return;
   }
-  if (!free.length && taken.length === 1) {
-    attachAndMark_(rowNumber, inv, taken[0].t);
+  const takenPick = free.length ? null : nearestByDate_(taken, invoiceDate);
+  if (takenPick) {
+    attachAndMark_(rowNumber, inv, takenPick.t);
     return;
   }
   // Money is committed but not moved. The invoice is handled, so the thread
   // leaves the Inbox. No receipt goes up yet: the transaction only takes one
   // once it settles, and this row keeps reconciling until it does.
-  if (!executed.length && scheduled.length === 1) {
-    markScheduled_(rowNumber, scheduled[0].t);
+  const schedPick = executed.length ? null : nearestByDate_(scheduled, invoiceDate);
+  if (schedPick) {
+    markScheduled_(rowNumber, schedPick.t);
     return;
   }
 
@@ -154,6 +157,22 @@ function reconcileOne_(rowNumber, inv, pool) {
  * /sepa/transfers and every reader of that column resolves ids against
  * /transactions.
  */
+/**
+ * The candidate closest in time to the invoice, or null when two are too close
+ * together to separate. A vendor billing the same amount every month puts
+ * several identical charges in the window: the right one sits within days of
+ * the invoice and its siblings a month away, so a lead of MATCH_DATE_MARGIN_DAYS
+ * distinguishes them. Without that lead the row stays for a human.
+ */
+function nearestByDate_(cands, invoiceDate) {
+  if (!cands.length) return null;
+  if (cands.length === 1) return cands[0];
+  const scored = cands.map(function (c) {
+    return { c: c, days: Math.abs((new Date(c.t.emitted_at) - invoiceDate) / 86400000) };
+  }).sort(function (a, b) { return a.days - b.days; });
+  return (scored[1].days - scored[0].days) >= CFG.MATCH_DATE_MARGIN_DAYS ? scored[0].c : null;
+}
+
 function markScheduled_(rowNumber, txn) {
   ledgerUpdate_(rowNumber, {
     status: STATUS.SCHEDULED,
@@ -197,37 +216,53 @@ function attachAndMark_(rowNumber, inv, txn) {
 }
 
 /**
- * Score a candidate. amountExact is gated on amount and currency agreeing on
- * either the account figure (EUR) or the original local one (FX, e.g. a USD
- * invoice). A STRONG match also needs the counterparty to agree, by name, by
- * invoice number, or by IBAN.
+ * Score a candidate. An agreeing amount is mandatory and comes from one of two
+ * places: the account amount or the original local amount when either is in the
+ * invoice currency, or -- when neither is -- a band on the converted amount,
+ * which counts only alongside a counterparty hit. A STRONG match additionally
+ * needs the counterparty name to agree.
  */
 function scoreMatch_(inv, t) {
   const cur = String(inv.currency).toUpperCase();
   const amt = Number(inv.amount);
-  const amountExact =
-    (t.currency && t.currency.toUpperCase() === cur && near_(t.amount, amt)) ||
-    (t.local_currency && t.local_currency.toUpperCase() === cur && near_(t.local_amount, amt));
 
   // Match the invoice against the transaction's name AND remark fields.
   const haystack = [t.label, t.reference, t.note, t.clean_counterparty_name].filter(Boolean).join(' ');
   const nameScore = nameSimilarity_(inv.supplier, haystack, inv.supplierRaw);
   const nameHit = nameScore >= CFG.NAME_MATCH_MIN;
 
-  // Invoice number appearing in the payment reference: strong corroboration.
+  // Invoice number appearing in any free-text field. A card charge carries no
+  // reference at all, so this only ever fires on a transfer.
   const invNo = normRef_(inv.invoiceNumber);
-  const invNoHit = invNo.length >= 4 && normRef_(t.reference).indexOf(invNo) >= 0;
+  const invNoHit = invNo.length >= 4 &&
+    normRef_([t.reference, t.note, t.label].filter(Boolean).join(' ')).indexOf(invNo) >= 0;
 
-  // Vendor IBAN matching the transfer counterparty: the strongest signal.
+  // Vendor IBAN matching the transfer counterparty — the strongest signal.
   const cp = t.transfer && t.transfer.counterparty_account_number;
   const ibanHit = !!inv.supplierIban && !!cp && normIban_(inv.supplierIban) === normIban_(cp);
+  const counterparty = nameHit || invNoHit || ibanHit;
+
+  const accountMatch = !!(t.currency && t.currency.toUpperCase() === cur && near_(t.amount, amt));
+  const localMatch = !!(t.local_currency && t.local_currency.toUpperCase() === cur && near_(t.local_amount, amt));
+  const amountExact = accountMatch || localMatch;
+
+  // Neither side carries the invoice currency, so no exact comparison exists.
+  // The band is wide enough to absorb an unknown rate and a card fee, which
+  // makes it too weak to stand alone: it needs the counterparty as well.
+  const noComparable = !(t.currency && t.currency.toUpperCase() === cur) &&
+                       !(t.local_currency && t.local_currency.toUpperCase() === cur);
+  const amountConverted = !amountExact && noComparable && counterparty && amt > 0 &&
+    Math.abs(Number(t.amount) - amt) / amt <= CFG.FX_AMOUNT_TOLERANCE;
 
   return {
     amountExact: amountExact,
+    amountConverted: amountConverted,
+    amountOk: amountExact || amountConverted,
     nameScore: nameScore,
-    counterparty: nameHit || invNoHit || ibanHit,
-    strong: amountExact && (nameHit || invNoHit || ibanHit),
-    total: (amountExact ? 1 : 0) + nameScore + (invNoHit ? 0.5 : 0) + (ibanHit ? 1 : 0)
+    counterparty: counterparty,
+    strong: (amountExact || amountConverted) && counterparty,
+    total: (amountExact ? 1 : 0) + (amountConverted ? 0.6 : 0) + nameScore +
+           (invNoHit ? 0.5 : 0) + (ibanHit ? 1 : 0)
   };
 }
 

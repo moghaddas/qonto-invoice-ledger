@@ -85,6 +85,14 @@ const CFG = {
   AMOUNT_TOLERANCE: 0.02,        // absolute, currency-agnostic; assumes a two-decimal minor unit
   NAME_MATCH_MIN: 0.34,          // token-overlap ratio to count as a name hit
   MAX_ATTEMPTS: 12,              // give up auto-matching after this many runs
+  // A monthly subscription puts several identical charges in the match window.
+  // The correct one sits within days of the invoice and its siblings a month
+  // away, so the nearest wins only when it leads by this margin.
+  MATCH_DATE_MARGIN_DAYS: 14,
+  // A card network can convert before the bank sees the charge, leaving no
+  // amount in the invoice currency. This band on the converted amount counts
+  // only alongside a counterparty hit, never on its own.
+  FX_AMOUNT_TOLERANCE: 0.15,
   STALE_REVIEW_DAYS: 21,         // unmatched older than this -> flag in digest
   // Extraction failures are transient (rate limit, timeout, unreadable body).
   // The cap stops a document the model can never read from retrying for ever.
